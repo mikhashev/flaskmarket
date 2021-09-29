@@ -1,9 +1,9 @@
 from market import app
 from market import db
-from flask import render_template, redirect, url_for, flash
+from flask import render_template, redirect, url_for, flash, request
 from market.models import Item, User
-from market.forms import RegisterForm, LoginForm
-from flask_login import login_user, logout_user, login_required
+from market.forms import RegisterForm, LoginForm, PurchaseItemForm
+from flask_login import login_user, logout_user, login_required, current_user
 
 
 @app.route('/')
@@ -12,12 +12,32 @@ def home_page():
     return render_template('home.html')
 
 
-@app.route('/market')
+@app.route('/market', methods=['GET', 'POST'])
 @login_required
 def market_page():
-    items = Item.query.all()
+    purchase_form = PurchaseItemForm()
 
-    return render_template('market.html', items=items)
+    if request.method == "POST":
+        purchased_item = request.form.get('purchased_item')
+        purchased_item_obj = Item.query.filter_by(name=purchased_item).first()
+
+        if purchased_item_obj:
+            if current_user.can_purchase(purchased_item_obj):
+                purchased_item_obj.buy(current_user)
+                flash(f'You buy {purchased_item_obj.name} for {purchased_item_obj.price}$', category='success')
+
+            else:
+                flash(f"You don't have enough money to buy {purchased_item_obj.name} for {purchased_item_obj.price}$", category='danger')
+
+        return redirect(url_for('market_page'))
+
+    if request.method == "GET":
+        items = Item.query.filter_by(owner=None)
+
+        return render_template('market.html', items=items, purchase_form=purchase_form)
+
+
+
 
 
 @app.route('/register', methods=['GET', 'POST'])
