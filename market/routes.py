@@ -2,7 +2,7 @@ from market import app
 from market import db
 from flask import render_template, redirect, url_for, flash, request
 from market.models import Item, User
-from market.forms import RegisterForm, LoginForm, PurchaseItemForm
+from market.forms import RegisterForm, LoginForm, PurchaseItemForm, SellItemForm
 from flask_login import login_user, logout_user, login_required, current_user
 
 
@@ -16,6 +16,7 @@ def home_page():
 @login_required
 def market_page():
     purchase_form = PurchaseItemForm()
+    selling_form = SellItemForm()
 
     if request.method == "POST":
         purchased_item = request.form.get('purchased_item')
@@ -27,17 +28,26 @@ def market_page():
                 flash(f'You buy {purchased_item_obj.name} for {purchased_item_obj.price}$', category='success')
 
             else:
-                flash(f"You don't have enough money to buy {purchased_item_obj.name} for {purchased_item_obj.price}$", category='danger')
+                flash(f"You don't have enough money to buy {purchased_item_obj.name} for {purchased_item_obj.price}$",
+                      category='danger')
+        sold_item = request.form.get('sold_item')
+        sold_item_obj = Item.query.filter_by(name=sold_item).first()
+
+        if sold_item_obj:
+            if current_user.can_sell(sold_item_obj):
+                sold_item_obj.sell(current_user)
+                flash(f"You sold {sold_item_obj.name} back to market", category='success')
+            else:
+                flash(f"Something went wrong with selling {sold_item_obj.name}", category='danger')
 
         return redirect(url_for('market_page'))
 
     if request.method == "GET":
         items = Item.query.filter_by(owner=None)
+        owned_items = Item.query.filter_by(owner=current_user.id)
 
-        return render_template('market.html', items=items, purchase_form=purchase_form)
-
-
-
+        return render_template('market.html', items=items, purchase_form=purchase_form, owned_items=owned_items,
+                               selling_form=selling_form)
 
 
 @app.route('/register', methods=['GET', 'POST'])
